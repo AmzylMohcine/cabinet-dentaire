@@ -912,7 +912,15 @@ export default function DentaCare() {
                 const hasPwd = user && user.password && user.password !== "";
                 return (
                   <div key={x.r} onClick={() => {
-                    if (!hasPwd) { setRole(x.r); return; }
+                    if (!hasPwd) {
+                      // Sauvegarder en localStorage même sans mot de passe
+                      try {
+                        localStorage.setItem("dc_role", x.r);
+                        localStorage.setItem("dc_time", Date.now().toString());
+                      } catch(e) {}
+                      setRole(x.r);
+                      return;
+                    }
                     setLoginRole(x.r); setLoginPwd(""); setLoginErr("");
                   }} style={{ width: 180, padding: "28px 20px", borderRadius: 16, background: "rgba(255,255,255,.08)", border: "1.5px solid rgba(255,255,255,.12)", cursor: "pointer", color: "white", transition: "all .2s" }}>
                     <div style={{ width: 48, height: 48, borderRadius: 14, background: x.bg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}><Ic n={x.ic} s={24} /></div>
@@ -935,8 +943,17 @@ export default function DentaCare() {
                 onChange={e => { setLoginPwd(e.target.value); setLoginErr(""); }}
                 onKeyDown={e => {
                   if (e.key === "Enter") {
-                    if (checkLogin(loginRole, loginPwd)) setRole(loginRole);
-                    else setLoginErr("Mot de passe incorrect");
+                    if (checkLogin(loginRole, loginPwd)) {
+                      // Restaurer la page selon le rôle
+                      const savedPg = localStorage.getItem("dc_pg");
+                      const asstPages = ["dashboard","patients","appointments","billing"];
+                      const docPages = ["dashboard","patients","appointments","billing","prescriptions","devis","settings"];
+                      const allowed = loginRole === "doctor" ? docPages : asstPages;
+                      if (!savedPg || !allowed.includes(savedPg)) {
+                        localStorage.setItem("dc_pg", "dashboard");
+                      }
+                      setRole(loginRole);
+                    } else setLoginErr("Mot de passe incorrect");
                   }
                 }}
                 style={{ width: "100%", padding: "12px 16px", borderRadius: 10, border: loginErr ? "2px solid #EF4444" : "1.5px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.06)", color: "white", fontSize: 14, outline: "none", marginBottom: 8 }}

@@ -338,7 +338,7 @@ export default function DentaCare() {
   const [accessGranted, setAccessGranted] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [accessErr, setAccessErr] = useState("");
-  const ACCESS_CODE = "7071";
+  const ACCESS_CODE = "777";
   const [mobileMenu, setMobileMenu] = useState(false);
   const [loginPwd, setLoginPwd] = useState("");
   const [loginRole, setLoginRole] = useState(null);
@@ -1472,6 +1472,9 @@ export default function DentaCare() {
             <div><div style={{ fontSize: 11, fontWeight: 600, color: C.mu, marginBottom: 4 }}>Date</div><input type="date" min={todayISO} value={frmRdv.date} onChange={e => setFrmRdv({ ...frmRdv, date: e.target.value })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, outline: "none" }} /></div>
             <Inp label="Heure" value={frmRdv.heure} onChange={v => setFrmRdv({ ...frmRdv, heure: v })} type="time" />
           </div>
+          {frmRdv.date && frmRdv.date < todayISO && (
+            <div style={{ padding: "8px 12px", background: C.dngL, borderRadius: 8, fontSize: 12, color: C.dng, fontWeight: 600 }}>⚠️ Impossible de prendre un RDV dans le passé</div>
+          )}
           {frmRdv.date && frmRdv.heure && appts.find(a => a.date === frmRdv.date && a.heure === frmRdv.heure && !["annulé", "reporté"].includes(a.statut)) && (
             <div style={{ padding: "8px 12px", background: C.dngL, borderRadius: 8, fontSize: 12, color: C.dng, fontWeight: 600 }}>⚠️ Ce créneau est déjà pris par {gpn(appts.find(a => a.date === frmRdv.date && a.heure === frmRdv.heure && !["annulé", "reporté"].includes(a.statut)).patientId)}</div>
           )}
@@ -1481,7 +1484,12 @@ export default function DentaCare() {
           </div>
           <Inp label="Notes" value={frmRdv.notes} onChange={v => setFrmRdv({ ...frmRdv, notes: v })} />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
-            <Bt v="ghost" onClick={cm}>Annuler</Bt><Bt onClick={addRdv}>Créer le RDV</Bt>
+            <Bt v="ghost" onClick={cm}>Annuler</Bt>
+            {(() => {
+              const hasConflict = frmRdv.date && frmRdv.heure && appts.find(a => a.date === frmRdv.date && a.heure === frmRdv.heure && !["annulé", "reporté"].includes(a.statut));
+              const isPast = frmRdv.date && frmRdv.date < todayISO;
+              return <Bt onClick={addRdv} style={hasConflict || isPast ? { opacity: .4, pointerEvents: "none" } : {}}>Créer le RDV</Bt>;
+            })()}
           </div>
         </Modal>
       )}
@@ -1496,11 +1504,18 @@ export default function DentaCare() {
             <div><div style={{ fontSize: 11, fontWeight: 600, color: C.mu, marginBottom: 4 }}>Nouvelle date</div><input type="date" min={todayISO} value={frmRdv.date} onChange={e => setFrmRdv({ ...frmRdv, date: e.target.value })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, outline: "none" }} /></div>
             <Inp label="Nouvelle heure" value={frmRdv.heure} onChange={v => setFrmRdv({ ...frmRdv, heure: v })} type="time" />
           </div>
+          {frmRdv.date && frmRdv.date < todayISO && (
+            <div style={{ padding: "8px 12px", background: C.dngL, borderRadius: 8, fontSize: 12, color: C.dng, fontWeight: 600 }}>⚠️ Impossible de reporter dans le passé</div>
+          )}
           {frmRdv.date && frmRdv.heure && appts.find(a => a.date === frmRdv.date && a.heure === frmRdv.heure && !["annulé", "reporté"].includes(a.statut) && a.id !== modalData.id) && (
             <div style={{ padding: "8px 12px", background: C.dngL, borderRadius: 8, fontSize: 12, color: C.dng, fontWeight: 600 }}>⚠️ Créneau déjà pris</div>
           )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
-            <Bt v="ghost" onClick={cm}>Annuler</Bt><Bt onClick={confirmReport}>Reporter</Bt>
+            {(() => {
+              const hasConflict = frmRdv.date && frmRdv.heure && appts.find(a => a.date === frmRdv.date && a.heure === frmRdv.heure && !["annulé", "reporté"].includes(a.statut) && a.id !== modalData.id);
+              const isPast = frmRdv.date && frmRdv.date < todayISO;
+              return <><Bt v="ghost" onClick={cm}>Annuler</Bt><Bt onClick={confirmReport} style={hasConflict || isPast ? { opacity: .4, pointerEvents: "none" } : {}}>Reporter</Bt></>;
+            })()}
           </div>
         </Modal>
       )}

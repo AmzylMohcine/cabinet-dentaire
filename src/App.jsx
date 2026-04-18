@@ -289,7 +289,18 @@ function DChart({ pid, chart, onUpdate, sel, setSel, ro }) {
 
 /* ============================================ */
 export default function DentaCare() {
-  const [role, setRole] = useState(null);
+  const [role, setRole] = useState(() => {
+    try {
+      const saved = localStorage.getItem("dc_role");
+      const savedTime = localStorage.getItem("dc_time");
+      // On ne restaure jamais le médecin automatiquement
+      if (saved && saved !== "doctor" && savedTime) {
+        const diff = Date.now() - parseInt(savedTime);
+        if (diff < 24 * 60 * 60 * 1000) return saved;
+      }
+    } catch(e) {}
+    return null;
+  });
   const [pg, setPg] = useState("dashboard");
   // On utilise toujours Supabase maintenant
   const isElectron = false;
@@ -303,6 +314,11 @@ export default function DentaCare() {
   const [notifs, setNotifs] = useState([]);
   const [selPat, setSelPat] = useState(null);
   const [selTooth, setSelTooth] = useState(null);
+  const [selTreat, setSelTreat] = useState(null);
+  const [newInvNotif, setNewInvNotif] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("dc_inv_notif") || "[]"); } catch(e) { return []; }
+  });
+  const [showInvNotif, setShowInvNotif] = useState(false);
   const [search, setSearch] = useState("");
   const [patTab, setPatTab] = useState("info");
   const [coll, setColl] = useState(false);
@@ -472,9 +488,17 @@ export default function DentaCare() {
     const newInv = { patientId: treatPat.id, date: todayISO, montant: total, paye: 0, statut: "impayé", actes: acteNames, sent: true };
     const { data: savedTreatInv } = await supabase.from("invoices").insert([{
       patient_id: newInv.patientId, date: newInv.date, montant: newInv.montant,
-      paye: 0, actes: newInv.actes || []
+      paye: 0, actes: newInv.actes || [], statut: "impayé", sent: true
     }]).select().single();
-    if (savedTreatInv) setInvoices(inv => [...inv, { ...savedTreatInv, patientId: savedTreatInv.patient_id, actes: savedTreatInv.actes || [] }]);
+    if (savedTreatInv) {
+      const invData = { ...savedTreatInv, patientId: savedTreatInv.patient_id, actes: savedTreatInv.actes || [], sent: true, statut: "impayé" };
+      setInvoices(inv => [...inv, invData]);
+      // Notif pour l'assistante
+      const notifData = { id: savedTreatInv.id, patientName: `${treatPat.prenom} ${treatPat.nom}`, montant: total, date: todayISO };
+      const newNotifs = [...(JSON.parse(localStorage.getItem("dc_inv_notif") || "[]")), notifData];
+      localStorage.setItem("dc_inv_notif", JSON.stringify(newNotifs));
+      setNewInvNotif(newNotifs);
+    }
     setTreatSummary(s => ({ ...s, invoiceSent: true }));
     notif("Facture envoyée à l'assistante ✓", "success");
   };
@@ -730,12 +754,21 @@ export default function DentaCare() {
   }
 
   /* LOGIN */
-  const checkLogin = (r, pwd) => {
-    const user = users.find(u => u.role === r);
-    if (!user) return false;
-    if (!user.password || user.password === "") return true;
-    return pwd === user.password;
-  };
+const checkLogin = (r, pwd) => {
+  const user = users.find(u => u.role === r);
+  if (!user) return false;
+  if (!user.password || user.password === "") {
+    localStorage.setItem("dc_role", r);
+    localStorage.setItem("dc_time", Date.now().toString());
+    return true;
+  }
+  if (pwd === user.password) {
+    localStorage.setItem("dc_role", r);
+    localStorage.setItem("dc_time", Date.now().toString());
+    return true;
+  }
+  return false;
+};
 
   if (!role) {
     return (
@@ -828,11 +861,57 @@ export default function DentaCare() {
         ))}
       </div>
 
+      {/* Cloche notif assistante desktop */}
+      {isAsst && newInvNotif.length > 0 && (
+        <div onClick={() => setShowInvNotif(true)} style={{ position: "fixed", top: 14, right: 14, zIndex: 1999, cursor: "pointer", background: C.dng, borderRadius: 12, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, color: "white", fontWeight: 700, fontSize: 13, boxShadow: "0 4px 14px rgba(0,0,0,.2)", animation: "ni .3s ease" }}>
+          🔔 <span>{newInvNotif.length} nouvelle{newInvNotif.length > 1 ? "s" : ""} facture{newInvNotif.length > 1 ? "s" : ""}</span>
+        </div>
+      )}
+
+      {/* Modal notif factures assistante */}
+      {showInvNotif && isAsst && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2100 }} onClick={() => setShowInvNotif(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, width: 420, maxHeight: "80vh", overflow: "auto", padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,.2)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700 }}>🔔 Nouvelles factures</h2>
+              <div onClick={() => setShowInvNotif(false)} style={{ cursor: "pointer", color: C.mu }}>✕</div>
+            </div>
+            {newInvNotif.map((n, i) => (
+              <div key={i} style={{ padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${C.bd}`, marginBottom: 8, background: "#FAFBFC" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>🦷 {n.patientName}</div>
+                    <div style={{ fontSize: 12, color: C.mu, marginTop: 2 }}>Date : {n.date}</div>
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: C.dng }}>{(n.montant || 0).toLocaleString()} MAD</div>
+                </div>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <button onClick={() => {
+                localStorage.setItem("dc_inv_notif", "[]");
+                setNewInvNotif([]);
+                setShowInvNotif(false);
+                setPg("billing");
+              }} style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: C.ok, color: "white", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                ✓ Tout marquer comme lu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <div className="mobile-header" style={{ display: "none", position: "fixed", top: 0, left: 0, right: 0, height: 56, background: C.side, alignItems: "center", padding: "0 16px", zIndex: 1500, gap: 12 }}>
         <div onClick={() => setMobileMenu(true)} style={{ color: "white", cursor: "pointer", fontSize: 24, padding: 4 }}>☰</div>
         <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🦷</div>
         <div style={{ color: "white", fontWeight: 700, fontSize: 14, flex: 1 }}>{DOC.cabinet}</div>
+        {isAsst && newInvNotif.length > 0 && (
+          <div onClick={() => setShowInvNotif(true)} style={{ position: "relative", cursor: "pointer", padding: 4 }}>
+            <span style={{ fontSize: 20 }}>🔔</span>
+            <span style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, borderRadius: 8, background: C.dng, color: "white", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{newInvNotif.length}</span>
+          </div>
+        )}
       </div>
 
       {/* Mobile Sidebar Overlay */}
@@ -892,8 +971,8 @@ export default function DentaCare() {
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: coll ? "10px" : "9px 14px", marginBottom: 2, borderRadius: 8, cursor: "pointer", background: isA ? C.sideA : "transparent", color: isA ? "white" : "rgba(255,255,255,.5)", justifyContent: coll ? "center" : "flex-start" }}>
                 <span style={{ flexShrink: 0 }}><Ic n={item.ic} s={18} /></span>
                 {!coll && <span style={{ fontSize: 13, fontWeight: isA ? 600 : 400 }}>{item.l}</span>}
-                {!coll && item.id === "bill" && isAsst && pendInv.length > 0 && (
-                  <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: C.dng, color: "white", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{pendInv.length}</span>
+                {!coll && item.id === "bill" && isAsst && newInvNotif.length > 0 && (
+                  <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: C.dng, color: "white", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{newInvNotif.length}</span>
                 )}
               </div>
             );
@@ -911,7 +990,7 @@ export default function DentaCare() {
       </div>
 
       {/* Content */}
-      <div className="main-content" style={{ flex: 1, overflow: "auto", padding: 24 }}>
+      <div className="main-content" style={{ flex: 1, overflow: "auto", padding: 24, paddingTop: 24 }}>
 
         {/* DASHBOARD */}
         {pg === "dashboard" && (
@@ -1109,7 +1188,36 @@ export default function DentaCare() {
               </div>
             )}
             {patTab === "chart" && <Cd><DChart pid={selPat.id} chart={chart} onUpdate={isDoc ? updateChart : null} sel={isDoc ? selTooth : null} setSel={isDoc ? setSelTooth : () => { }} ro={isAsst} /></Cd>}
-            {patTab === "treats" && <Cd><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}><thead><tr style={{ background: "#F8FAFC" }}>{["Date", "Dent", "Acte", "Statut", "Coût", "Payé"].map((h, i) => <th key={i} style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.mu, textTransform: "uppercase", borderBottom: `1px solid ${C.bd}` }}>{h}</th>)}</tr></thead><tbody>{treats.filter(t => t.patientId === selPat.id).map(t => <tr key={t.id}><td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}` }}>{t.date}</td><td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, fontWeight: 600 }}>#{t.dent}</td><td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}` }}>{t.acte}</td><td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}` }}><SB s={t.statut} /></td><td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, fontWeight: 600 }}>{t.cout.toLocaleString()}</td><td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, color: t.paye < t.cout ? C.dng : C.ok, fontWeight: 600 }}>{t.paye.toLocaleString()}</td></tr>)}</tbody></table></Cd>}
+            {patTab === "treats" && (
+              <Cd>
+                <div className="table-wrap">
+                  {treats.filter(t => t.patientId === selPat.id).length === 0 ? (
+                    <p style={{ color: C.li, fontSize: 13, padding: "20px 0", textAlign: "center" }}>Aucun traitement enregistré</p>
+                  ) : (
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead><tr style={{ background: "#F8FAFC" }}>
+                        {["Date", "Actes", "Total"].map((h, i) => (
+                          <th key={i} style={{ padding: "8px 12px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.mu, textTransform: "uppercase", borderBottom: `1px solid ${C.bd}` }}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {treats.filter(t => t.patientId === selPat.id).map(t => (
+                          <tr key={t.id}>
+                            <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, whiteSpace: "nowrap" }}>{t.date}</td>
+                            <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}` }}>
+                              {(t.actes || []).map((a, i) => (
+                                <div key={i} style={{ fontSize: 12 }}>{a.acte} — <strong>{(a.prix || 0).toLocaleString()} MAD</strong></div>
+                              ))}
+                            </td>
+                            <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, fontWeight: 700, color: C.pri }}>{(t.total || 0).toLocaleString()} MAD</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </Cd>
+            )}
             {patTab === "hist" && <Cd>{appts.filter(a => a.patientId === selPat.id).sort((a, b) => b.date.localeCompare(a.date)).map(a => <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${C.bd}` }}><div style={{ width: 40, height: 40, borderRadius: 8, background: C.priL, display: "flex", alignItems: "center", justifyContent: "center", color: C.pri, fontWeight: 700, fontSize: 10, textAlign: "center", lineHeight: 1.2 }}>{a.date.slice(5)}<br />{a.heure}</div><div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 13 }}>{a.type}</div><div style={{ fontSize: 11, color: C.mu }}>{a.duree}min</div></div><SB s={a.statut} /></div>)}</Cd>}
           </div>
         )}

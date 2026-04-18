@@ -371,6 +371,10 @@ export default function DentaCare() {
   const [accessErr, setAccessErr] = useState("");
   const ACCESS_CODE = "777";
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [newInvNotif, setNewInvNotif] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("dc_inv_notif") || "[]"); } catch(e) { return []; }
+  });
+  const [showInvNotif, setShowInvNotif] = useState(false);
   const [loginPwd, setLoginPwd] = useState("");
   const [loginRole, setLoginRole] = useState(null);
   const [loginErr, setLoginErr] = useState("");
@@ -379,9 +383,15 @@ export default function DentaCare() {
     { role: "assistant", password: "", label: "Assistante", active: true }
   ]);
 
-  // ===== LOAD ALL DATA FROM DATABASE ON MOUNT =====
-  // ===== CHARGEMENT DEPUIS SUPABASE =====
+  // ===== CHARGEMENT + REALTIME SUPABASE =====
   useEffect(() => {
+    const mapPat = x => ({ ...x, dateNaissance: x.date_naissance, treated: x.treated || false });
+    const mapAppt = x => ({ ...x, patientId: x.patient_id, inSalle: x.in_salle });
+    const mapInv = x => ({ ...x, patientId: x.patient_id, actes: x.actes || [], statut: x.statut || "impayé" });
+    const mapTreat = x => ({ ...x, patientId: x.patient_id });
+    const mapRx = x => ({ ...x, patientId: x.patient_id });
+    const mapDevis = x => ({ ...x, patientId: x.patient_id });
+
     const loadData = async () => {
       try {
         const [
@@ -396,12 +406,6 @@ export default function DentaCare() {
           supabase.from("treatments").select("*").order("id"),
           supabase.from("charts").select("*")
         ]);
-        const mapPat = x => ({ ...x, dateNaissance: x.date_naissance, treated: x.treated || false });
-        const mapAppt = x => ({ ...x, patientId: x.patient_id, inSalle: x.in_salle });
-        const mapInv = x => ({ ...x, patientId: x.patient_id, actes: x.actes || [] });
-        const mapTreat = x => ({ ...x, patientId: x.patient_id });
-        const mapRx = x => ({ ...x, patientId: x.patient_id });
-        const mapDevis = x => ({ ...x, patientId: x.patient_id });
         setPatients((p || []).map(mapPat));
         setAppts((a || []).map(mapAppt));
         setInvoices((i || []).map(mapInv));
@@ -415,6 +419,77 @@ export default function DentaCare() {
       setLoading(false);
     };
     loadData();
+
+    // ===== REALTIME patients =====
+    const patChannel = supabase.channel("realtime-patients")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "patients" }, payload => {
+        const p = payload.new;
+        setPatients(prev => {
+          if (prev.find(x => x.id === p.id)) return prev;
+          setNotifs(n => {
+            const nid = Date.now();
+            setTimeout(() => setNotifs(nn => nn.filter(x => x.id !== nid)), 5000);
+            return [...n, { id: nid, msg: `👤 Nouveau patient : ${p.prenom} ${p.nom}`, type: "info" }];
+          });
+          return [...prev, mapPat(p)];
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "patients" }, payload => {
+        setPatients(prev => prev.map(x => x.id === payload.new.id ? mapPat(payload.new) : x));
+      })
+      .subscribe();
+
+    // ===== REALTIME appointments =====
+    const apptChannel = supabase.channel("realtime-appointments")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "appointments" }, payload => {
+        const a = payload.new;
+        setAppts(prev => {
+          if (prev.find(x => x.id === a.id)) return prev;
+          setNotifs(n => {
+            const nid = Date.now();
+            setTimeout(() => setNotifs(nn => nn.filter(x => x.id !== nid)), 5000);
+            return [...n, { id: nid, msg: `📅 Nouveau RDV ajouté`, type: "info" }];
+          });
+          return [...prev, mapAppt(a)];
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "appointments" }, payload => {
+        setAppts(prev => prev.map(x => x.id === payload.new.id ? mapAppt(payload.new) : x));
+      })
+      .subscribe();
+
+    // ===== REALTIME invoices =====
+    const invChannel = supabase.channel("realtime-invoices")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "invoices" }, payload => {
+        const i = payload.new;
+        setInvoices(prev => {
+          if (prev.find(x => x.id === i.id)) return prev;
+          // Notif assistante pour nouvelle facture
+          if (i.sent) {
+            const nid = Date.now();
+            setNotifs(n => {
+              setTimeout(() => setNotifs(nn => nn.filter(x => x.id !== nid)), 6000);
+              return [...n, { id: nid, msg: `🧾 Nouvelle facture : ${(i.montant||0).toLocaleString()} MAD`, type: "warn" }];
+            });
+            setNewInvNotif(prev2 => {
+              const updated = [...prev2, { id: i.id, patientId: i.patient_id, montant: i.montant, date: i.date }];
+              try { localStorage.setItem("dc_inv_notif", JSON.stringify(updated)); } catch(e) {}
+              return updated;
+            });
+          }
+          return [...prev, mapInv(i)];
+        });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "invoices" }, payload => {
+        setInvoices(prev => prev.map(x => x.id === payload.new.id ? mapInv(payload.new) : x));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(patChannel);
+      supabase.removeChannel(apptChannel);
+      supabase.removeChannel(invChannel);
+    };
   }, []);
 
   // Wrapper setPg qui sauvegarde dans localStorage
@@ -510,9 +585,11 @@ export default function DentaCare() {
     const newInv = { patientId: treatPat.id, date: todayISO, montant: total, paye: 0, statut: "impayé", actes: acteNames, sent: true };
     const { data: savedTreatInv } = await supabase.from("invoices").insert([{
       patient_id: newInv.patientId, date: newInv.date, montant: newInv.montant,
-      paye: 0, actes: newInv.actes || []
+      paye: 0, actes: newInv.actes || [], statut: "impayé", sent: true
     }]).select().single();
-    if (savedTreatInv) setInvoices(inv => [...inv, { ...savedTreatInv, patientId: savedTreatInv.patient_id, actes: savedTreatInv.actes || [] }]);
+    if (savedTreatInv) {
+      setInvoices(inv => [...inv, { ...savedTreatInv, patientId: savedTreatInv.patient_id, actes: savedTreatInv.actes || [], statut: "impayé", sent: true }]);
+    }
     setTreatSummary(s => ({ ...s, invoiceSent: true }));
     notif("Facture envoyée à l'assistante ✓", "success");
   };
@@ -872,6 +949,45 @@ export default function DentaCare() {
         ))}
       </div>
 
+      {/* Cloche notif assistante */}
+      {isAsst && newInvNotif.length > 0 && (
+        <div onClick={() => setShowInvNotif(true)} style={{ position: "fixed", top: 14, right: 14, zIndex: 1999, cursor: "pointer", background: C.dng, borderRadius: 12, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, color: "white", fontWeight: 700, fontSize: 13, boxShadow: "0 4px 14px rgba(0,0,0,.2)", animation: "ni .3s ease" }}>
+          🔔 {newInvNotif.length} nouvelle{newInvNotif.length > 1 ? "s" : ""} facture{newInvNotif.length > 1 ? "s" : ""}
+        </div>
+      )}
+
+      {/* Modal notif factures assistante */}
+      {showInvNotif && isAsst && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2100 }} onClick={() => setShowInvNotif(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, width: 420, maxHeight: "80vh", overflow: "auto", padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,.2)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700 }}>🔔 Nouvelles factures</h2>
+              <div onClick={() => setShowInvNotif(false)} style={{ cursor: "pointer", color: C.mu, fontSize: 20 }}>✕</div>
+            </div>
+            {newInvNotif.map((n, i) => (
+              <div key={i} style={{ padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${C.bd}`, marginBottom: 8, background: "#FAFBFC", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>🦷 {gpn(n.patientId) || "Patient"}</div>
+                  <div style={{ fontSize: 12, color: C.mu, marginTop: 2 }}>Date : {n.date}</div>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: C.dng }}>{(n.montant || 0).toLocaleString()} MAD</div>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <button onClick={() => { setShowInvNotif(false); }} style={{ padding: "10px 16px", borderRadius: 8, border: `1px solid ${C.bd}`, background: "transparent", cursor: "pointer", fontSize: 13 }}>Fermer</button>
+              <button onClick={() => {
+                localStorage.setItem("dc_inv_notif", "[]");
+                setNewInvNotif([]);
+                setShowInvNotif(false);
+                setPgSaved("billing");
+              }} style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: C.ok, color: "white", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                ✓ Marquer comme lu → Facturation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <div className="mobile-header" style={{ display: "none", position: "fixed", top: 0, left: 0, right: 0, height: 56, background: C.side, alignItems: "center", padding: "0 16px", zIndex: 1500, gap: 12 }}>
         <div onClick={() => setMobileMenu(true)} style={{ color: "white", cursor: "pointer", fontSize: 24, padding: 4 }}>☰</div>
@@ -936,8 +1052,8 @@ export default function DentaCare() {
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: coll ? "10px" : "9px 14px", marginBottom: 2, borderRadius: 8, cursor: "pointer", background: isA ? C.sideA : "transparent", color: isA ? "white" : "rgba(255,255,255,.5)", justifyContent: coll ? "center" : "flex-start" }}>
                 <span style={{ flexShrink: 0 }}><Ic n={item.ic} s={18} /></span>
                 {!coll && <span style={{ fontSize: 13, fontWeight: isA ? 600 : 400 }}>{item.l}</span>}
-                {!coll && item.id === "bill" && isAsst && pendInv.length > 0 && (
-                  <span style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: C.dng, color: "white", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{pendInv.length}</span>
+                {!coll && item.id === "bill" && isAsst && newInvNotif.length > 0 && (
+                  <span onClick={() => setShowInvNotif(true)} style={{ marginLeft: "auto", minWidth: 18, height: 18, borderRadius: 9, background: C.dng, color: "white", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{newInvNotif.length}</span>
                 )}
               </div>
             );

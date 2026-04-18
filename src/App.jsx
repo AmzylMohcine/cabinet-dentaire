@@ -492,11 +492,40 @@ export default function DentaCare() {
     };
   }, []);
 
-  // Wrapper setPg qui sauvegarde dans localStorage
+  // Wrapper setPg qui sauvegarde dans localStorage + gère historique navigateur
   const setPgSaved = (page) => {
     setPg(page);
-    try { localStorage.setItem("dc_pg", page); } catch(e) {}
+    try {
+      localStorage.setItem("dc_pg", page);
+      // Ajouter dans l'historique du navigateur pour que "retour" fonctionne sur mobile
+      window.history.pushState({ page }, "", "#" + page);
+    } catch(e) {}
   };
+
+  // Gérer le bouton retour du navigateur / geste iOS
+  useEffect(() => {
+    const handlePopState = (e) => {
+      const page = e.state?.page || localStorage.getItem("dc_pg") || "dashboard";
+      const validPages = ["dashboard","patients","appointments","billing","prescriptions","devis","settings"];
+      if (validPages.includes(page)) {
+        setPg(page);
+        try { localStorage.setItem("dc_pg", page); } catch(e2) {}
+      } else {
+        setPg("dashboard");
+      }
+      setSelPat(null);
+      setTreatPat(null);
+    };
+    window.addEventListener("popstate", handlePopState);
+    // Initialiser l'URL avec la page courante
+    try {
+      const currentPg = localStorage.getItem("dc_pg") || "dashboard";
+      if (!window.location.hash) {
+        window.history.replaceState({ page: currentPg }, "", "#" + currentPg);
+      }
+    } catch(e) {}
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const gp = (id) => patients.find(p => p.id === id);
   const gpn = (id) => { const p = gp(id); return p ? `${p.prenom} ${p.nom}` : "—"; };
@@ -949,9 +978,9 @@ export default function DentaCare() {
         ))}
       </div>
 
-      {/* Cloche notif assistante */}
+      {/* Cloche notif assistante - desktop uniquement */}
       {isAsst && newInvNotif.length > 0 && (
-        <div onClick={() => setShowInvNotif(true)} style={{ position: "fixed", top: 14, right: 14, zIndex: 1999, cursor: "pointer", background: C.dng, borderRadius: 12, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, color: "white", fontWeight: 700, fontSize: 13, boxShadow: "0 4px 14px rgba(0,0,0,.2)", animation: "ni .3s ease" }}>
+        <div className="desktop-only-notif" onClick={() => setShowInvNotif(true)} style={{ position: "fixed", top: 14, right: 14, zIndex: 1999, cursor: "pointer", background: C.dng, borderRadius: 12, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, color: "white", fontWeight: 700, fontSize: 13, boxShadow: "0 4px 14px rgba(0,0,0,.2)", animation: "ni .3s ease" }}>
           🔔 {newInvNotif.length} nouvelle{newInvNotif.length > 1 ? "s" : ""} facture{newInvNotif.length > 1 ? "s" : ""}
         </div>
       )}
@@ -990,9 +1019,18 @@ export default function DentaCare() {
 
       {/* Mobile Header */}
       <div className="mobile-header" style={{ display: "none", position: "fixed", top: 0, left: 0, right: 0, height: 56, background: C.side, alignItems: "center", padding: "0 16px", zIndex: 1500, gap: 12 }}>
-        <div onClick={() => setMobileMenu(true)} style={{ color: "white", cursor: "pointer", fontSize: 24, padding: 4 }}>☰</div>
+        <div onClick={() => setMobileMenu(true)} style={{ color: "white", cursor: "pointer", fontSize: 22, padding: 4 }}>☰</div>
         <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🦷</div>
-        <div style={{ color: "white", fontWeight: 700, fontSize: 14, flex: 1 }}>{DOC.cabinet}</div>
+        <div style={{ color: "white", fontWeight: 700, fontSize: 13, flex: 1 }}>{DOC.cabinet}</div>
+        {isAsst && newInvNotif.length > 0 && (
+          <div onClick={() => setShowInvNotif(true)} style={{ position: "relative", cursor: "pointer", padding: "4px 8px", background: "rgba(255,255,255,.1)", borderRadius: 8, display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 16 }}>🔔</span>
+            <span style={{ position: "absolute", top: 0, right: 0, width: 16, height: 16, borderRadius: 8, background: C.dng, color: "white", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{newInvNotif.length}</span>
+          </div>
+        )}
+        {isDoc && (
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", padding: "4px 8px", background: "rgba(255,255,255,.08)", borderRadius: 6 }}>Dr.</div>
+        )}
       </div>
 
       {/* Mobile Sidebar Overlay */}

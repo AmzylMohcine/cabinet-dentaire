@@ -338,7 +338,7 @@ export default function DentaCare() {
   const [accessGranted, setAccessGranted] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [accessErr, setAccessErr] = useState("");
-  const ACCESS_CODE = "elktam2026";
+  const ACCESS_CODE = "7071";
   const [mobileMenu, setMobileMenu] = useState(false);
   const [loginPwd, setLoginPwd] = useState("");
   const [loginRole, setLoginRole] = useState(null);

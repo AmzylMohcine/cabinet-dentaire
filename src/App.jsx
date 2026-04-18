@@ -334,6 +334,18 @@ export default function DentaCare() {
   const [newPwd2, setNewPwd2] = useState("");
   const [asstPwd, setAsstPwd] = useState("");
   const [rdvTab, setRdvTab] = useState("today");
+  const [accessGranted, setAccessGranted] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const [accessErr, setAccessErr] = useState("");
+  const ACCESS_CODE = "7450";
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [loginPwd, setLoginPwd] = useState("");
+  const [loginRole, setLoginRole] = useState(null);
+  const [loginErr, setLoginErr] = useState("");
+  const [users, setUsers] = useState([
+    { role: "doctor", password: "doc2026", label: "Docteur", active: true },
+    { role: "assistant", password: "", label: "Assistante", active: true }
+  ]);
 
   // ===== LOAD ALL DATA FROM DATABASE ON MOUNT =====
   // ===== CHARGEMENT DEPUIS SUPABASE =====
@@ -678,8 +690,7 @@ export default function DentaCare() {
     { id: "appointments", l: "Rendez-vous", ic: "cal" },
     { id: "billing", l: "Facturation", ic: "bill" },
     { id: "prescriptions", l: "Ordonnances", ic: "rx" },
-    { id: "devis", l: "Devis", ic: "devis" },
-    { id: "settings", l: "Paramètres", ic: "stats" }
+    { id: "devis", l: "Devis", ic: "devis" }
   ];
   const navAsst = [
     { id: "dashboard", l: "Tableau de bord", ic: "dash" },
@@ -689,21 +700,39 @@ export default function DentaCare() {
   ];
   const nav = isDoc ? navDoc : navAsst;
 
+  /* ACCESS CODE GATE */
+  if (!accessGranted) {
+    return (
+      <div style={{ height: "100vh", display: "flex", fontFamily: "'DM Sans','Segoe UI',sans-serif", background: `linear-gradient(135deg,${C.side},#1a3a5c)` }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');`}</style>
+        <div style={{ margin: "auto", textAlign: "center", padding: "0 20px", width: "100%", maxWidth: 380 }}>
+          <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>🦷</div>
+          <h1 style={{ color: "white", fontSize: 24, fontWeight: 700, marginBottom: 6 }}>{DOC.cabinet}</h1>
+          <p style={{ color: "rgba(255,255,255,.35)", fontSize: 12, marginBottom: 30 }}>Espace réservé au personnel du cabinet</p>
+          <div style={{ background: "rgba(255,255,255,.08)", borderRadius: 16, padding: "24px 20px", border: "1.5px solid rgba(255,255,255,.12)" }}>
+            <div style={{ fontWeight: 600, fontSize: 14, color: "white", marginBottom: 14 }}>🔑 Code d'accès</div>
+            <input
+              type="password"
+              placeholder="Entrez le code d'accès"
+              value={accessCode}
+              onChange={e => { setAccessCode(e.target.value); setAccessErr(""); }}
+              onKeyDown={e => { if (e.key === "Enter") { if (accessCode === ACCESS_CODE) setAccessGranted(true); else setAccessErr("Code incorrect"); }}}
+              style={{ width: "100%", padding: "12px 16px", borderRadius: 10, border: accessErr ? "2px solid #EF4444" : "1.5px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.06)", color: "white", fontSize: 14, outline: "none", marginBottom: 8 }}
+              autoFocus
+            />
+            {accessErr && <div style={{ color: "#EF4444", fontSize: 12, marginBottom: 8 }}>{accessErr}</div>}
+            <button onClick={() => { if (accessCode === ACCESS_CODE) setAccessGranted(true); else setAccessErr("Code incorrect"); }} style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${C.acc},${C.pri})`, color: "white", cursor: "pointer", fontSize: 13, fontWeight: 700, marginTop: 6 }}>Accéder</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /* LOGIN */
-  const [loginPwd, setLoginPwd] = useState("");
-  const [loginRole, setLoginRole] = useState(null);
-  const [loginErr, setLoginErr] = useState("");
-  const [users, setUsers] = useState([
-    { role: "doctor", password: "doc2026", label: "Docteur", active: true },
-    { role: "assistant", password: "", label: "Assistante", active: true }
-  ]);
-
-  // Users gérés localement (pas de DB pour les users)
-
   const checkLogin = (r, pwd) => {
     const user = users.find(u => u.role === r);
     if (!user) return false;
-    if (!user.password || user.password === "") return true; // no password = direct access
+    if (!user.password || user.password === "") return true;
     return pwd === user.password;
   };
 
@@ -711,14 +740,14 @@ export default function DentaCare() {
     return (
       <div style={{ height: "100vh", display: "flex", fontFamily: "'DM Sans','Segoe UI',sans-serif", background: `linear-gradient(135deg,${C.side},#1a3a5c)` }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');`}</style>
-        <div style={{ margin: "auto", textAlign: "center" }}>
+        <div style={{ margin: "auto", textAlign: "center", padding: "0 20px", width: "100%", maxWidth: 500 }}>
           <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>🦷</div>
-          <h1 style={{ color: "white", fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Centre dentaire El ktamALLO</h1>
+          <h1 style={{ color: "white", fontSize: 24, fontWeight: 700, marginBottom: 4 }}>{DOC.cabinet}</h1>
           <p style={{ color: "rgba(255,255,255,.45)", fontSize: 13, marginBottom: 4 }}>{DOC.name}</p>
           <p style={{ color: "rgba(255,255,255,.3)", fontSize: 12, marginBottom: 36 }}>{DOC.addr1} — {DOC.addr2}</p>
 
           {!loginRole ? (
-            <div style={{ display: "flex", gap: 20, justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
               {[
                 { r: "doctor", l: "Docteur", sub: "Accès complet", ic: "treat", bg: `linear-gradient(135deg,${C.treat},${C.acc})` },
                 { r: "assistant", l: "Assistante", sub: "Accueil & RDV", ic: "user", bg: `linear-gradient(135deg,${C.pri},#5BA4C9)` }
@@ -788,9 +817,24 @@ export default function DentaCare() {
   }
 
   /* MAIN */
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: C.tx, background: C.bg, overflow: "hidden" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button:hover{opacity:.9}@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes ni{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:translateX(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button:hover{opacity:.9}@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes ni{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:translateX(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+      @media(max-width:768px){
+        .desktop-sidebar{display:none !important}
+        .mobile-header{display:flex !important}
+        .main-content{padding:12px !important}
+        .stat-grid-4{grid-template-columns:1fr 1fr !important}
+        .grid-2col{grid-template-columns:1fr !important}
+        table{font-size:11px !important}
+        td,th{padding:6px 8px !important}
+      }
+      @media(min-width:769px){
+        .mobile-header{display:none !important}
+        .mobile-overlay{display:none !important}
+      }
+      `}</style>
 
       {/* Notifs */}
       <div style={{ position: "fixed", top: 14, right: 14, zIndex: 2000, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -799,8 +843,51 @@ export default function DentaCare() {
         ))}
       </div>
 
-      {/* Sidebar */}
-      <div style={{ width: coll ? 60 : 236, background: C.side, display: "flex", flexDirection: "column", transition: "width .3s", flexShrink: 0 }}>
+      {/* Mobile Header */}
+      <div className="mobile-header" style={{ display: "none", position: "fixed", top: 0, left: 0, right: 0, height: 56, background: C.side, alignItems: "center", padding: "0 16px", zIndex: 1500, gap: 12 }}>
+        <div onClick={() => setMobileMenu(true)} style={{ color: "white", cursor: "pointer", fontSize: 24, padding: 4 }}>☰</div>
+        <div style={{ width: 28, height: 28, borderRadius: 7, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🦷</div>
+        <div style={{ color: "white", fontWeight: 700, fontSize: 14, flex: 1 }}>{DOC.cabinet}</div>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {mobileMenu && (
+        <div className="mobile-overlay" style={{ position: "fixed", inset: 0, zIndex: 1600 }}>
+          <div onClick={() => setMobileMenu(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.5)" }} />
+          <div style={{ position: "relative", width: 260, height: "100%", background: C.side, display: "flex", flexDirection: "column", zIndex: 1 }}>
+            <div style={{ padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🦷</div>
+              <div style={{ color: "white", fontWeight: 700, fontSize: 14, flex: 1 }}>{DOC.cabinet}</div>
+              <div onClick={() => setMobileMenu(false)} style={{ color: "rgba(255,255,255,.5)", cursor: "pointer", fontSize: 20 }}>✕</div>
+            </div>
+            <div style={{ margin: "10px 10px 0", padding: "8px 12px", borderRadius: 8, background: isDoc ? "rgba(43,122,158,.15)" : "rgba(56,178,172,.15)", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 26, height: 26, borderRadius: 7, background: isDoc ? C.pri : C.acc, display: "flex", alignItems: "center", justifyContent: "center" }}><Ic n={isDoc ? "treat" : "user"} s={13} /></div>
+              <div style={{ flex: 1 }}><div style={{ color: "white", fontSize: 11, fontWeight: 600 }}>{isDoc ? "Dr. El Ktam" : "Assistante"}</div></div>
+            </div>
+            <nav style={{ flex: 1, padding: "10px 6px" }}>
+              {nav.map(item => {
+                const isA = pg === item.id || (item.id === "patients" && ["patient-detail", "salle"].includes(pg));
+                return (
+                  <div key={item.id} onClick={() => { setPg(item.id); setSelPat(null); setTreatPat(null); setTreatDone(false); setTreatSummary(null); setMobileMenu(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", marginBottom: 2, borderRadius: 8, cursor: "pointer", background: isA ? C.sideA : "transparent", color: isA ? "white" : "rgba(255,255,255,.5)" }}>
+                    <span><Ic n={item.ic} s={18} /></span>
+                    <span style={{ fontSize: 13, fontWeight: isA ? 600 : 400 }}>{item.l}</span>
+                  </div>
+                );
+              })}
+            </nav>
+            <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
+              <div onClick={() => { setRole(null); setLoginRole(null); setLoginPwd(""); setPg("dashboard"); setMobileMenu(false); }}
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, cursor: "pointer", color: "rgba(255,255,255,.4)", fontSize: 12 }}>
+                <Ic n="swap" s={14} /><span>Déconnexion</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Sidebar */}
+      <div className="desktop-sidebar" style={{ width: coll ? 60 : 236, background: C.side, display: "flex", flexDirection: "column", transition: "width .3s", flexShrink: 0 }}>
         <div style={{ padding: coll ? "18px 10px" : "18px 20px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setColl(!coll)}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>🦷</div>
           {!coll && <div style={{ color: "white", fontWeight: 700, fontSize: 14 }}>Centre dentaire El ktam</div>}
@@ -839,7 +926,7 @@ export default function DentaCare() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
+      <div className="main-content" style={{ flex: 1, overflow: "auto", padding: 24, paddingTop: typeof window !== 'undefined' && window.innerWidth < 768 ? 70 : 24 }}>
 
         {/* DASHBOARD */}
         {pg === "dashboard" && (
@@ -848,7 +935,7 @@ export default function DentaCare() {
               <h1 style={{ fontSize: 24, fontWeight: 700 }}>Tableau de bord</h1>
               <p style={{ color: C.mu, fontSize: 13, marginTop: 3 }}>{dateStr}</p>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: isDoc ? "repeat(4,1fr)" : "repeat(2,1fr)", gap: 14, marginBottom: 24 }}>
+            <div className="stat-grid-4" style={{ display: "grid", gridTemplateColumns: isDoc ? "repeat(4,1fr)" : "repeat(2,1fr)", gap: 14, marginBottom: 24 }}>
               {[
                 { l: "Patients", v: patients.length, ic: "pats", c: C.pri, bg: C.priL, sh: true },
                 { l: "RDV aujourd'hui", v: todayA.length, ic: "cal", c: C.acc, bg: C.accG, sh: true },
@@ -861,7 +948,7 @@ export default function DentaCare() {
                 </Cd>
               ))}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 18 }}>
+            <div className="grid-2col" style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 18 }}>
               {/* Today's RDV */}
               <Cd>
                 <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>📅 RDV du jour</h3>
@@ -959,7 +1046,7 @@ export default function DentaCare() {
               <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.li }}><Ic n="search" s={16} /></span>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un patient..." style={{ width: "100%", padding: "10px 10px 10px 38px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, fontFamily: "inherit", background: C.wh }} />
             </div>
-            <Cd style={{ padding: 0 }}>
+            <Cd style={{ padding: 0, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "#F8FAFC" }}>
                   {["Patient", "Tél", "Assurance", ""].map((h, i) => (
@@ -1023,7 +1110,7 @@ export default function DentaCare() {
               ))}
             </div>
             {patTab === "info" && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div className="grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <Cd>{[{ l: "Naissance", v: selPat.dateNaissance }, { l: "Genre", v: selPat.genre === "M" ? "Masculin" : "Féminin" }, { l: "Adresse", v: selPat.adresse }, { l: "Email", v: selPat.email }].map((r, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 3 ? `1px solid ${C.bd}` : "none", fontSize: 13 }}>
                     <span style={{ color: C.mu }}>{r.l}</span><span style={{ fontWeight: 600 }}>{r.v || "—"}</span>
@@ -1057,7 +1144,7 @@ export default function DentaCare() {
               {treatPat.allergies?.length > 0 && <div style={{ padding: "8px 14px", background: "rgba(231,76,95,.25)", borderRadius: 8, border: "1px solid rgba(231,76,95,.4)", animation: treatDone ? "none" : "pulse 2s infinite" }}><div style={{ fontSize: 10, fontWeight: 700 }}>⚠️ ALLERGIES</div><div style={{ fontSize: 12, fontWeight: 600 }}>{treatPat.allergies.join(", ")}</div></div>}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className="grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               {/* LEFT: Dental chart + Actes */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <Cd><h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🦷 Schéma dentaire</h3><DChart pid={treatPat.id} chart={chart} onUpdate={updateChart} sel={selTooth} setSel={setSelTooth} /></Cd>
@@ -1209,7 +1296,7 @@ export default function DentaCare() {
                       <div key={t.k} onClick={() => setRdvTab(t.k)} style={{ padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, background: rdvTab === t.k ? C.pri : "transparent", color: rdvTab === t.k ? "white" : C.mu }}>{t.l}</div>
                     ))}
                   </div>
-                  <Cd style={{ padding: 0 }}>
+                  <Cd style={{ padding: 0, overflowX: "auto" }}>
                     {sorted.length === 0 ? (
                       <div style={{ padding: "40px 20px", textAlign: "center", color: C.mu, fontSize: 13 }}>Aucun rendez-vous</div>
                     ) : (
@@ -1276,7 +1363,7 @@ export default function DentaCare() {
                 </Cd>
               )}
             </div>
-            <Cd style={{ padding: 0 }}>
+            <Cd style={{ padding: 0, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "#F8FAFC" }}>
                   {["N°", "Patient", "Total", "Payé", "Reste", "Statut", ""].map((h, i) => (
@@ -1556,86 +1643,6 @@ export default function DentaCare() {
             </div>
           </div>
         </Modal>
-      )}
-
-      {/* SETTINGS - Doctor only */}
-      {pg === "settings" && isDoc && (
-        <div style={{ animation: "fi .3s" }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>Paramètres</h1>
-
-          {/* Change own password */}
-          <Cd>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>🔐 Mon mot de passe</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 400 }}>
-              <input type="password" placeholder="Ancien mot de passe" value={oldPwd} onChange={e => setOldPwd(e.target.value)} style={{ padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, outline: "none" }} />
-              <input type="password" placeholder="Nouveau mot de passe" value={newPwd} onChange={e => setNewPwd(e.target.value)} style={{ padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, outline: "none" }} />
-              <input type="password" placeholder="Confirmer le nouveau mot de passe" value={newPwd2} onChange={e => setNewPwd2(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { const docUser = users.find(u => u.role === "doctor"); if (oldPwd !== (docUser?.password || "")) return notif("Ancien mot de passe incorrect", "warn"); if (!newPwd) return notif("Nouveau mot de passe requis", "warn"); if (newPwd !== newPwd2) return notif("Ne correspondent pas", "warn"); if (newPwd.length < 4) return notif("Minimum 4 caractères", "warn"); (async () => { setUsers(u => u.map(x => x.role === "doctor" ? { ...x, password: newPwd } : x)); setOldPwd(""); setNewPwd(""); setNewPwd2(""); notif("Mot de passe modifié ✓", "success"); })(); }}} style={{ padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, outline: "none" }} />
-              <Bt v="primary" icon="check" onClick={async () => { const docUser = users.find(u => u.role === "doctor"); if (oldPwd !== (docUser?.password || "")) return notif("Ancien mot de passe incorrect", "warn"); if (!newPwd) return notif("Nouveau mot de passe requis", "warn"); if (newPwd !== newPwd2) return notif("Ne correspondent pas", "warn"); if (newPwd.length < 4) return notif("Minimum 4 caractères", "warn"); setUsers(u => u.map(x => x.role === "doctor" ? { ...x, password: newPwd } : x)); setOldPwd(""); setNewPwd(""); setNewPwd2(""); notif("Mot de passe modifié ✓", "success"); }}>Modifier mon mot de passe</Bt>
-            </div>
-          </Cd>
-
-          {/* Manage assistant */}
-          <Cd>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>👩‍💼 Compte Assistante</h3>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg,${C.pri},#5BA4C9)`, display: "flex", alignItems: "center", justifyContent: "center" }}><Ic n="user" s={18} /></div>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>Assistante</div>
-                <div style={{ fontSize: 12, color: C.mu }}>{users.find(u => u.role === "assistant")?.password ? "🔒 Protégé par mot de passe" : "🔓 Accès libre (pas de mot de passe)"}</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8, maxWidth: 400, alignItems: "flex-end" }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.mu, marginBottom: 4 }}>{users.find(u => u.role === "assistant")?.password ? "Changer le mot de passe" : "Définir un mot de passe"}</div>
-                <input type="password" placeholder="Nouveau mot de passe assistante" value={asstPwd} onChange={e => setAsstPwd(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { (async () => { setUsers(u => u.map(x => x.role === "assistant" ? { ...x, password: asstPwd } : x)); notif(asstPwd ? "MDP assistante défini ✓" : "MDP supprimé — accès libre", "success"); setAsstPwd(""); })(); }}} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, outline: "none" }} />
-              </div>
-              <Bt v="primary" icon="check" onClick={async () => { setUsers(u => u.map(x => x.role === "assistant" ? { ...x, password: asstPwd } : x)); notif(asstPwd ? "MDP assistante défini ✓" : "MDP supprimé — accès libre", "success"); setAsstPwd(""); }}>Enregistrer</Bt>
-            </div>
-            {users.find(u => u.role === "assistant")?.password ? (
-              <div>
-                <div style={{ marginTop: 10 }}>
-                  <Bt v="ghost" onClick={async () => { setUsers(u => u.map(x => x.role === "assistant" ? { ...x, password: "" } : x)); notif("Accès libre pour l'assistante ✓", "success"); }} style={{ color: C.dng, fontSize: 12 }}>Supprimer le mot de passe (accès libre)</Bt>
-                </div>
-                <div style={{ marginTop: 8, padding: "8px 12px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#92400E" }}>Mot de passe actuel : <strong>{users.find(u => u.role === "assistant")?.password}</strong></div>
-              </div>
-            ) : null}
-          </Cd>
-
-          {/* DB Tables viewer */}
-          <Cd>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>🗄️ Base de données</h3>
-            <div style={{ fontSize: 13, color: C.mu, marginBottom: 12 }}>Résumé des données enregistrées</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
-              {[
-                { l: "Patients", v: patients.length, c: C.pri },
-                { l: "Rendez-vous", v: appts.length, c: C.acc },
-                { l: "Factures", v: invoices.length, c: C.warn },
-                { l: "Ordonnances", v: rxSaved.length, c: C.ok },
-                { l: "Devis", v: devisSaved.length, c: C.treat },
-                { l: "Traitements", v: treats.length, c: C.mu }
-              ].map((t, i) => (
-                <div key={i} style={{ padding: "14px 16px", borderRadius: 10, border: `1.5px solid ${C.bd}`, background: "#FAFBFC" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: t.c }}>{t.v}</div>
-                  <div style={{ fontSize: 12, color: C.mu, marginTop: 2 }}>{t.l}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 14, fontSize: 12, color: C.li }}>
-              Les données sont stockées localement dans un fichier SQLite. Pour consulter les tables en détail, utilisez <strong>DB Browser for SQLite</strong> (gratuit) sur le fichier <code>dentacare.db</code>.
-            </div>
-          </Cd>
-
-          {/* App info */}
-          <Cd>
-            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>ℹ️ À propos</h3>
-            <div style={{ fontSize: 13, color: C.mu, lineHeight: 1.8 }}>
-              <strong>{DOC.cabinet}</strong> v1.0<br />
-              {DOC.name} — {DOC.title}<br />
-              {DOC.addr1}, {DOC.addr2}<br />
-              📞 {DOC.tel} — ✉ {DOC.email}
-            </div>
-          </Cd>
-        </div>
       )}
 
       {/* PRINT PREVIEW */}

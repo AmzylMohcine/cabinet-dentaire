@@ -289,16 +289,29 @@ function DChart({ pid, chart, onUpdate, sel, setSel, ro }) {
 
 /* ============================================ */
 export default function DentaCare() {
- const [role, setRole] = useState(() => {
-  const saved = localStorage.getItem("dc_role");
-  const savedTime = localStorage.getItem("dc_time");
-  if (saved && savedTime) {
-    const diff = Date.now() - parseInt(savedTime);
-    if (diff < 24 * 60 * 60 * 1000) return saved; // 24h
-  }
-  return null;
-});
-  const [pg, setPg] = useState("dashboard");
+  const [role, setRole] = useState(() => {
+    try {
+      const saved = localStorage.getItem("dc_role");
+      const savedTime = localStorage.getItem("dc_time");
+      if (saved && savedTime) {
+        const diff = Date.now() - parseInt(savedTime);
+        if (diff < 24 * 60 * 60 * 1000) return saved;
+      }
+    } catch(e) {}
+    return null;
+  });
+  const [pg, setPg] = useState(() => {
+    try {
+      const saved = localStorage.getItem("dc_pg");
+      // patient-detail et salle ont besoin de données en mémoire
+      // donc on les redirige vers patients/dashboard
+      const validPages = ["dashboard","patients","appointments","billing","prescriptions","devis","settings"];
+      if (saved && validPages.includes(saved)) return saved;
+      if (saved === "patient-detail") return "patients";
+      if (saved === "salle") return "dashboard";
+    } catch(e) {}
+    return "dashboard";
+  });
   // On utilise toujours Supabase maintenant
   const isElectron = false;
 
@@ -343,7 +356,17 @@ export default function DentaCare() {
   const [newPwd2, setNewPwd2] = useState("");
   const [asstPwd, setAsstPwd] = useState("");
   const [rdvTab, setRdvTab] = useState("today");
-  const [accessGranted, setAccessGranted] = useState(false);
+  const [accessGranted, setAccessGranted] = useState(() => {
+    try {
+      const saved = localStorage.getItem("dc_access");
+      const savedTime = localStorage.getItem("dc_access_time");
+      if (saved === "1" && savedTime) {
+        const diff = Date.now() - parseInt(savedTime);
+        if (diff < 24 * 60 * 60 * 1000) return true;
+      }
+    } catch(e) {}
+    return false;
+  });
   const [accessCode, setAccessCode] = useState("");
   const [accessErr, setAccessErr] = useState("");
   const ACCESS_CODE = "777";
@@ -356,7 +379,8 @@ export default function DentaCare() {
     { role: "assistant", password: "", label: "Assistante", active: true }
   ]);
 
-  // ===== CHARGEMENT + REALTIME SUPABASE =====
+  // ===== LOAD ALL DATA FROM DATABASE ON MOUNT =====
+  // ===== CHARGEMENT DEPUIS SUPABASE =====
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -372,9 +396,9 @@ export default function DentaCare() {
           supabase.from("treatments").select("*").order("id"),
           supabase.from("charts").select("*")
         ]);
-        const mapPat = x => ({ ...x, dateNaissance: x.date_naissance });
+        const mapPat = x => ({ ...x, dateNaissance: x.date_naissance, treated: x.treated || false });
         const mapAppt = x => ({ ...x, patientId: x.patient_id, inSalle: x.in_salle });
-        const mapInv = x => ({ ...x, patientId: x.patient_id, actes: x.actes || [], statut: x.statut || "impayé" });
+        const mapInv = x => ({ ...x, patientId: x.patient_id, actes: x.actes || [] });
         const mapTreat = x => ({ ...x, patientId: x.patient_id });
         const mapRx = x => ({ ...x, patientId: x.patient_id });
         const mapDevis = x => ({ ...x, patientId: x.patient_id });
@@ -391,92 +415,13 @@ export default function DentaCare() {
       setLoading(false);
     };
     loadData();
+  }, []);
 
-    // ===== REALTIME - Patients =====
-    const patChannel = supabase.channel("patients-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "patients" }, payload => {
-        const p = payload.new;
-        const mapped = { ...p, dateNaissance: p.date_naissance };
-        setPatients(prev => {
-          if (prev.find(x => x.id === p.id)) return prev;
-          // Notif pour le médecin
-          if (role === "doctor") {
-            setNotifs(n => [...n, { id: Date.now(), msg: `👤 Nouveau patient : ${p.prenom} ${p.nom}`, type: "info" }]);
-            setTimeout(() => setNotifs(n => n.filter(x => x.id !== Date.now())), 5000);
-          }
-          return [...prev, mapped];
-        });
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "patients" }, payload => {
-        const p = payload.new;
-        setPatients(prev => prev.map(x => x.id === p.id ? { ...p, dateNaissance: p.date_naissance } : x));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "patients" }, payload => {
-        setPatients(prev => prev.filter(x => x.id !== payload.old.id));
-      })
-      .subscribe();
-
-    // ===== REALTIME - Appointments =====
-    const apptChannel = supabase.channel("appointments-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "appointments" }, payload => {
-        const a = payload.new;
-        const mapped = { ...a, patientId: a.patient_id, inSalle: a.in_salle };
-        setAppts(prev => {
-          if (prev.find(x => x.id === a.id)) return prev;
-          // Notif pour le médecin quand assistante ajoute un RDV
-          if (role === "doctor") {
-            const nid = Date.now();
-            setNotifs(n => [...n, { id: nid, msg: `📅 Nouveau RDV ajouté par l'assistante`, type: "info" }]);
-            setTimeout(() => setNotifs(n => n.filter(x => x.id !== nid)), 5000);
-          }
-          return [...prev, mapped];
-        });
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "appointments" }, payload => {
-        const a = payload.new;
-        setAppts(prev => prev.map(x => x.id === a.id ? { ...a, patientId: a.patient_id, inSalle: a.in_salle } : x));
-      })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "appointments" }, payload => {
-        setAppts(prev => prev.filter(x => x.id !== payload.old.id));
-      })
-      .subscribe();
-
-    // ===== REALTIME - Invoices =====
-    const invChannel = supabase.channel("invoices-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "invoices" }, payload => {
-        const i = payload.new;
-        const mapped = { ...i, patientId: i.patient_id, actes: i.actes || [], statut: i.statut || "impayé" };
-        setInvoices(prev => {
-          if (prev.find(x => x.id === i.id)) return prev;
-          // Notif pour l'assistante
-          if (role === "assistant" && i.sent) {
-            const nid = Date.now();
-            setNotifs(n => [...n, { id: nid, msg: `🧾 Nouvelle facture à encaisser — ${(i.montant || 0).toLocaleString()} MAD`, type: "warn" }]);
-            setTimeout(() => setNotifs(n => n.filter(x => x.id !== nid)), 6000);
-            // Ajouter à la liste des notifs factures
-            setNewInvNotif(prev => {
-              const notifData = { id: i.id, patientName: "Patient", montant: i.montant, date: i.date };
-              const updated = [...prev, notifData];
-              try { localStorage.setItem("dc_inv_notif", JSON.stringify(updated)); } catch(e) {}
-              return updated;
-            });
-          }
-          return [...prev, mapped];
-        });
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "invoices" }, payload => {
-        const i = payload.new;
-        setInvoices(prev => prev.map(x => x.id === i.id ? { ...i, patientId: i.patient_id, actes: i.actes || [], statut: i.statut || "impayé" } : x));
-      })
-      .subscribe();
-
-    // Cleanup
-    return () => {
-      supabase.removeChannel(patChannel);
-      supabase.removeChannel(apptChannel);
-      supabase.removeChannel(invChannel);
-    };
-  }, [role]);
+  // Wrapper setPg qui sauvegarde dans localStorage
+  const setPgSaved = (page) => {
+    setPg(page);
+    try { localStorage.setItem("dc_pg", page); } catch(e) {}
+  };
 
   const gp = (id) => patients.find(p => p.id === id);
   const gpn = (id) => { const p = gp(id); return p ? `${p.prenom} ${p.nom}` : "—"; };
@@ -546,6 +491,7 @@ export default function DentaCare() {
     const pat = gp(pid);
     if (pat) {
       const updatedPat = { ...pat, treated: true };
+      await supabase.from("patients").update({ treated: true }).eq("id", pat.id);
       setPatients(p => p.map(x => x.id === pid ? updatedPat : x));
     }
 
@@ -765,7 +711,7 @@ export default function DentaCare() {
     await supabase.from("charts").upsert({ patient_id: patientId, data: nc[patientId] || {}, updated_at: new Date().toISOString() }, { onConflict: "patient_id" });
   };
 
-  const openPat = p => { setSelPat(p); setPatTab("info"); setSelTooth(null); setPg("patient-detail"); };
+  const openPat = p => { setSelPat(p); setPatTab("info"); setSelTooth(null); setPgSaved("patient-detail"); };
   const enterSalle = p => {
     setTreatPat(p); setSelTooth(null); setTreatDone(false); setTreatSummary(null);
     setSalleRxDone(false); setSalleDevisDone(false);
@@ -773,7 +719,7 @@ export default function DentaCare() {
     const salleAppts = appts.filter(a => a.patientId === p.id && a.statut === "en salle");
     const initActes = salleAppts.map(a => ({ id: Date.now() + Math.random(), acte: a.type || "Consultation", prix: getPrix(a.type || "Consultation") }));
     setSalleActes(initActes.length ? initActes : [{ id: Date.now(), acte: "Consultation", prix: 200 }]);
-    setPg("salle");
+    setPgSaved("salle");
   };
   const filtP = patients.filter(p => `${p.nom} ${p.prenom} ${p.tel}`.toLowerCase().includes(search.toLowerCase()));
 
@@ -809,12 +755,12 @@ export default function DentaCare() {
               placeholder="Entrez le code d'accès"
               value={accessCode}
               onChange={e => { setAccessCode(e.target.value); setAccessErr(""); }}
-              onKeyDown={e => { if (e.key === "Enter") { if (accessCode === ACCESS_CODE) setAccessGranted(true); else setAccessErr("Code incorrect"); }}}
+              onKeyDown={e => { if (e.key === "Enter") { if (accessCode === ACCESS_CODE) { setAccessGranted(true); try { localStorage.setItem("dc_access","1"); localStorage.setItem("dc_access_time", Date.now().toString()); } catch(e) {} } else setAccessErr("Code incorrect"); }}}
               style={{ width: "100%", padding: "12px 16px", borderRadius: 10, border: accessErr ? "2px solid #EF4444" : "1.5px solid rgba(255,255,255,.2)", background: "rgba(255,255,255,.06)", color: "white", fontSize: 14, outline: "none", marginBottom: 8 }}
               autoFocus
             />
             {accessErr && <div style={{ color: "#EF4444", fontSize: 12, marginBottom: 8 }}>{accessErr}</div>}
-            <button onClick={() => { if (accessCode === ACCESS_CODE) setAccessGranted(true); else setAccessErr("Code incorrect"); }} style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${C.acc},${C.pri})`, color: "white", cursor: "pointer", fontSize: 13, fontWeight: 700, marginTop: 6 }}>Accéder</button>
+            <button onClick={() => { if (accessCode === ACCESS_CODE) { setAccessGranted(true); try { localStorage.setItem("dc_access","1"); localStorage.setItem("dc_access_time", Date.now().toString()); } catch(e) {} } else setAccessErr("Code incorrect"); }} style={{ width: "100%", padding: "11px", borderRadius: 10, border: "none", background: `linear-gradient(135deg,${C.acc},${C.pri})`, color: "white", cursor: "pointer", fontSize: 13, fontWeight: 700, marginTop: 6 }}>Accéder</button>
           </div>
         </div>
       </div>
@@ -822,21 +768,18 @@ export default function DentaCare() {
   }
 
   /* LOGIN */
-const checkLogin = (r, pwd) => {
-  const user = users.find(u => u.role === r);
-  if (!user) return false;
-  if (!user.password || user.password === "") {
-    localStorage.setItem("dc_role", r);
-    localStorage.setItem("dc_time", Date.now().toString());
+  const checkLogin = (r, pwd) => {
+    const user = users.find(u => u.role === r);
+    if (!user) return false;
+    const pwdOk = !user.password || user.password === "" || pwd === user.password;
+    if (!pwdOk) return false;
+    // Les deux rôles sauvegardés 24h
+    try {
+      localStorage.setItem("dc_role", r);
+      localStorage.setItem("dc_time", Date.now().toString());
+    } catch(e) {}
     return true;
-  }
-  if (pwd === user.password) {
-    localStorage.setItem("dc_role", r);
-    localStorage.setItem("dc_time", Date.now().toString());
-    return true;
-  }
-  return false;
-};
+  };
 
   if (!role) {
     return (
@@ -954,7 +897,7 @@ const checkLogin = (r, pwd) => {
               {nav.map(item => {
                 const isA = pg === item.id || (item.id === "patients" && ["patient-detail", "salle"].includes(pg));
                 return (
-                  <div key={item.id} onClick={() => { setPg(item.id); setSelPat(null); setTreatPat(null); setTreatDone(false); setTreatSummary(null); setMobileMenu(false); }}
+                  <div key={item.id} onClick={() => { setPgSaved(item.id); setSelPat(null); setTreatPat(null); setTreatDone(false); setTreatSummary(null); setMobileMenu(false); }}
                     style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", marginBottom: 2, borderRadius: 8, cursor: "pointer", background: isA ? C.sideA : "transparent", color: isA ? "white" : "rgba(255,255,255,.5)" }}>
                     <span><Ic n={item.ic} s={18} /></span>
                     <span style={{ fontSize: 13, fontWeight: isA ? 600 : 400 }}>{item.l}</span>
@@ -963,7 +906,7 @@ const checkLogin = (r, pwd) => {
               })}
             </nav>
             <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
-              <div onClick={() => { setRole(null); setLoginRole(null); setLoginPwd(""); setPg("dashboard"); setMobileMenu(false); }}
+              <div onClick={() => { setRole(null); setLoginRole(null); setLoginPwd(""); setPgSaved("dashboard"); setMobileMenu(false); }}
                 style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, cursor: "pointer", color: "rgba(255,255,255,.4)", fontSize: 12 }}>
                 <Ic n="swap" s={14} /><span>Déconnexion</span>
               </div>
@@ -982,14 +925,14 @@ const checkLogin = (r, pwd) => {
           <div style={{ margin: "10px 10px 0", padding: "8px 12px", borderRadius: 8, background: isDoc ? "rgba(43,122,158,.15)" : "rgba(56,178,172,.15)", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 26, height: 26, borderRadius: 7, background: isDoc ? C.pri : C.acc, display: "flex", alignItems: "center", justifyContent: "center" }}><Ic n={isDoc ? "treat" : "user"} s={13} /></div>
             <div style={{ flex: 1 }}><div style={{ color: "white", fontSize: 11, fontWeight: 600 }}>{isDoc ? "Dr. El Ktam" : "Assistante"}</div></div>
-            <div onClick={e => { e.stopPropagation(); setRole(null); setPg("dashboard"); setLoginRole(null); setLoginPwd(""); }} style={{ cursor: "pointer", color: "rgba(255,255,255,.3)", title: "Déconnexion" }}><Ic n="swap" s={14} /></div>
+            <div onClick={e => { e.stopPropagation(); setRole(null); setPgSaved("dashboard"); setLoginRole(null); setLoginPwd(""); }} style={{ cursor: "pointer", color: "rgba(255,255,255,.3)", title: "Déconnexion" }}><Ic n="swap" s={14} /></div>
           </div>
         )}
         <nav style={{ flex: 1, padding: "10px 6px" }}>
           {nav.map(item => {
             const isA = pg === item.id || (item.id === "patients" && ["patient-detail", "salle"].includes(pg));
             return (
-              <div key={item.id} onClick={() => { setPg(item.id); setSelPat(null); setTreatPat(null); setTreatDone(false); setTreatSummary(null); }}
+              <div key={item.id} onClick={() => { setPgSaved(item.id); setSelPat(null); setTreatPat(null); setTreatDone(false); setTreatSummary(null); }}
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: coll ? "10px" : "9px 14px", marginBottom: 2, borderRadius: 8, cursor: "pointer", background: isA ? C.sideA : "transparent", color: isA ? "white" : "rgba(255,255,255,.5)", justifyContent: coll ? "center" : "flex-start" }}>
                 <span style={{ flexShrink: 0 }}><Ic n={item.ic} s={18} /></span>
                 {!coll && <span style={{ fontSize: 13, fontWeight: isA ? 600 : 400 }}>{item.l}</span>}
@@ -1003,7 +946,7 @@ const checkLogin = (r, pwd) => {
         {/* Sidebar bottom */}
         {!coll && (
           <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(255,255,255,.08)" }}>
-            <div onClick={() => { setRole(null); setLoginRole(null); setLoginPwd(""); setPg("dashboard"); }}
+            <div onClick={() => { setRole(null); setLoginRole(null); setLoginPwd(""); setPgSaved("dashboard"); }}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, cursor: "pointer", color: "rgba(255,255,255,.4)", fontSize: 12 }}>
               <Ic n="swap" s={14} /><span>Déconnexion</span>
             </div>
@@ -1108,7 +1051,7 @@ const checkLogin = (r, pwd) => {
                     {[
                       { l: "Nouveau patient", ic: "plus", a: () => { setFrmPat(emptyPat); om("newPat"); } },
                       { l: "Nouveau RDV", ic: "cal", a: () => om("newRdv") },
-                      ...(isDoc ? [{ l: "Ordonnance", ic: "rx", a: () => setPg("prescriptions") }] : [])
+                      ...(isDoc ? [{ l: "Ordonnance", ic: "rx", a: () => setPgSaved("prescriptions") }] : [])
                     ].map((x, i) => (
                       <div key={i} onClick={x.a} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${C.bd}`, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                         <span style={{ color: C.pri }}><Ic n={x.ic} s={15} /></span>{x.l}
@@ -1172,7 +1115,7 @@ const checkLogin = (r, pwd) => {
         {pg === "patient-detail" && selPat && (
           <div style={{ animation: "fi .3s" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <div onClick={() => { setPg("patients"); setSelPat(null); }} style={{ cursor: "pointer", color: C.mu, fontSize: 12 }}>← Retour</div>
+              <div onClick={() => { setPgSaved("patients"); setSelPat(null); }} style={{ cursor: "pointer", color: C.mu, fontSize: 12 }}>← Retour</div>
               <div style={{ display: "flex", gap: 6 }}>
                 <Bt sz="sm" v="outline" icon="edit" onClick={() => openEditPat(selPat)}>Modifier</Bt>
                 {isDoc && !selPat.treated && <Bt sz="sm" v="treat" icon="treat" onClick={() => enterSalle(selPat)}>Salle</Bt>}
@@ -1247,7 +1190,7 @@ const checkLogin = (r, pwd) => {
         {/* SALLE */}
         {pg === "salle" && treatPat && isDoc && (
           <div style={{ animation: "fi .3s" }}>
-            <div onClick={() => { setPg("dashboard"); setTreatPat(null); setTreatDone(false); setTreatSummary(null); }} style={{ cursor: "pointer", color: C.mu, fontSize: 12, marginBottom: 16 }}>← Retour au tableau de bord</div>
+            <div onClick={() => { setPgSaved("dashboard"); setTreatPat(null); setTreatDone(false); setTreatSummary(null); }} style={{ cursor: "pointer", color: C.mu, fontSize: 12, marginBottom: 16 }}>← Retour au tableau de bord</div>
 
             {/* Header */}
             <div className="salle-banner" style={{ background: treatDone ? `linear-gradient(135deg,${C.ok},#1a7a4c)` : `linear-gradient(135deg,${C.treat},#1a5c45)`, borderRadius: 14, padding: "16px 24px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16, color: "white", flexWrap: "wrap" }}>
@@ -1377,7 +1320,7 @@ const checkLogin = (r, pwd) => {
                     </Cd>
 
                     <div style={{ textAlign: "center" }}>
-                      <Bt v="ghost" onClick={() => { setPg("dashboard"); setTreatPat(null); setTreatDone(false); setTreatSummary(null); }}>Terminé — Retour au tableau de bord</Bt>
+                      <Bt v="ghost" onClick={() => { setPgSaved("dashboard"); setTreatPat(null); setTreatDone(false); setTreatSummary(null); }}>Terminé — Retour au tableau de bord</Bt>
                     </div>
                   </>
                 )}
@@ -1429,7 +1372,7 @@ const checkLogin = (r, pwd) => {
                               <tr key={a.id} style={{ background: a.inSalle ? C.treatL : isToday && !isDone ? "#F0F7FF" : isDone ? "#FAFAFA" : "transparent", opacity: isDone ? .6 : 1 }}>
                                 <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, fontWeight: isToday ? 700 : 400 }}>{new Date(a.date + "T00:00").toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
                                 <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, fontWeight: 700, color: C.pri }}>{a.heure}</td>
-                                <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, fontWeight: 600, color: C.pri, cursor: "pointer" }} onClick={() => { const p = gp(a.patientId); if (p) { setSelPat(p); setPg("patient-detail"); }}}>{gpn(a.patientId)}</td>
+                                <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, fontWeight: 600, color: C.pri, cursor: "pointer" }} onClick={() => { const p = gp(a.patientId); if (p) { setSelPat(p); setPgSaved("patient-detail"); }}}>{gpn(a.patientId)}</td>
                                 <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}` }}>{a.type}</td>
                                 <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}`, color: C.mu }}>{a.duree} min</td>
                                 <td style={{ padding: "10px 12px", borderBottom: `1px solid ${C.bd}` }}><SB s={a.statut} /></td>

@@ -302,13 +302,18 @@ export default function DentaCare() {
   });
   const [pg, setPg] = useState(() => {
     try {
-      const saved = localStorage.getItem("dc_pg");
-      // patient-detail et salle ont besoin de données en mémoire
-      // donc on les redirige vers patients/dashboard
-      const validPages = ["dashboard","patients","appointments","billing","prescriptions","devis","settings"];
-      if (saved && validPages.includes(saved)) return saved;
-      if (saved === "patient-detail") return "patients";
-      if (saved === "salle") return "dashboard";
+      const savedPg = localStorage.getItem("dc_pg");
+      const savedRole = localStorage.getItem("dc_role");
+
+      // Pages accessibles selon le rôle
+      const docPages = ["dashboard","patients","appointments","billing","prescriptions","devis","settings"];
+      const asstPages = ["dashboard","patients","appointments","billing"];
+
+      const allowedPages = savedRole === "doctor" ? docPages : asstPages;
+
+      if (savedPg && allowedPages.includes(savedPg)) return savedPg;
+      if (savedPg === "patient-detail") return "patients";
+      if (savedPg === "salle") return "dashboard";
     } catch(e) {}
     return "dashboard";
   });

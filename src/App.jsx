@@ -713,7 +713,7 @@ export default function DentaCare() {
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');`}</style>
         <div style={{ margin: "auto", textAlign: "center" }}>
           <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>🦷</div>
-          <h1 style={{ color: "white", fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Centre dentaire El ktam</h1>
+          <h1 style={{ color: "white", fontSize: 28, fontWeight: 700, marginBottom: 4 }}>Centre dentaire El ktamALLO</h1>
           <p style={{ color: "rgba(255,255,255,.45)", fontSize: 13, marginBottom: 4 }}>{DOC.name}</p>
           <p style={{ color: "rgba(255,255,255,.3)", fontSize: 12, marginBottom: 36 }}>{DOC.addr1} — {DOC.addr2}</p>
 
@@ -779,7 +779,7 @@ export default function DentaCare() {
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         <div style={{ textAlign: "center" }}>
           <div style={{ width: 72, height: 72, borderRadius: 20, background: `linear-gradient(135deg,${C.acc},${C.pri})`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>🦷</div>
-          <h1 style={{ color: "white", fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Centre dentaire El ktam</h1>
+          <h1 style={{ color: "white", fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Centre dentaire El ktam </h1>
           <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,.2)", borderTopColor: "white", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "20px auto" }} />
           <p style={{ color: "rgba(255,255,255,.5)", fontSize: 13 }}>Chargement des données...</p>
         </div>

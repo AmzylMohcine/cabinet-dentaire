@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import './index.css';
 
 // ⚠️ REMPLACE CES DEUX VALEURS PAR TES VALEURS SUPABASE
 // Tu les trouves dans : Supabase > Settings > API
@@ -176,8 +177,8 @@ function Bt({ children, onClick, v = "primary", sz = "md", icon, disabled, style
   );
 }
 
-function Cd({ children, style: sx = {} }) {
-  return <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.bd}`, padding: 24, ...sx }}>{children}</div>;
+function Cd({ children, style: sx = {}, className = "" }) {
+  return <div className={className} style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.bd}`, padding: 24, ...sx }}>{children}</div>;
 }
 
 function Inp({ label, value, onChange, type = "text", placeholder, rows, style: sx = {} }) {
@@ -337,7 +338,7 @@ export default function DentaCare() {
   const [accessGranted, setAccessGranted] = useState(false);
   const [accessCode, setAccessCode] = useState("");
   const [accessErr, setAccessErr] = useState("");
-  const ACCESS_CODE = "7450";
+  const ACCESS_CODE = "elktam2026";
   const [mobileMenu, setMobileMenu] = useState(false);
   const [loginPwd, setLoginPwd] = useState("");
   const [loginRole, setLoginRole] = useState(null);
@@ -817,27 +818,11 @@ export default function DentaCare() {
   }
 
   /* MAIN */
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: "'DM Sans','Segoe UI',sans-serif", color: C.tx, background: C.bg, overflow: "hidden" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:10px}button:hover{opacity:.9}@keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes ni{from{opacity:0;transform:translateX(80px)}to{opacity:1;transform:translateX(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-      @media(max-width:768px){
-        .desktop-sidebar{display:none !important}
-        .mobile-header{display:flex !important}
-        .main-content{padding:12px !important}
-        .stat-grid-4{grid-template-columns:1fr 1fr !important}
-        .grid-2col{grid-template-columns:1fr !important}
-        table{font-size:11px !important}
-        td,th{padding:6px 8px !important}
-      }
-      @media(min-width:769px){
-        .mobile-header{display:none !important}
-        .mobile-overlay{display:none !important}
-      }
-      `}</style>
 
       {/* Notifs */}
-      <div style={{ position: "fixed", top: 14, right: 14, zIndex: 2000, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div className="notif-container" style={{ position: "fixed", top: 14, right: 14, zIndex: 2000, display: "flex", flexDirection: "column", gap: 6 }}>
         {notifs.map(n => (
           <div key={n.id} style={{ padding: "10px 18px", borderRadius: 10, background: n.type === "success" ? C.ok : n.type === "warn" ? C.wrn : C.pri, color: "white", fontSize: 13, fontWeight: 600, animation: "ni .3s ease", boxShadow: "0 4px 14px rgba(0,0,0,.15)", maxWidth: 380 }}>{n.msg}</div>
         ))}
@@ -926,7 +911,7 @@ export default function DentaCare() {
       </div>
 
       {/* Content */}
-      <div className="main-content" style={{ flex: 1, overflow: "auto", padding: 24, paddingTop: typeof window !== 'undefined' && window.innerWidth < 768 ? 70 : 24 }}>
+      <div className="main-content" style={{ flex: 1, overflow: "auto", padding: 24 }}>
 
         {/* DASHBOARD */}
         {pg === "dashboard" && (
@@ -1046,7 +1031,7 @@ export default function DentaCare() {
               <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.li }}><Ic n="search" s={16} /></span>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un patient..." style={{ width: "100%", padding: "10px 10px 10px 38px", borderRadius: 8, border: `1.5px solid ${C.bd}`, fontSize: 13, fontFamily: "inherit", background: C.wh }} />
             </div>
-            <Cd style={{ padding: 0, overflowX: "auto" }}>
+            <Cd style={{ padding: 0 }} className="table-wrap">
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "#F8FAFC" }}>
                   {["Patient", "Tél", "Assurance", ""].map((h, i) => (
@@ -1135,7 +1120,7 @@ export default function DentaCare() {
             <div onClick={() => { setPg("dashboard"); setTreatPat(null); setTreatDone(false); setTreatSummary(null); }} style={{ cursor: "pointer", color: C.mu, fontSize: 12, marginBottom: 16 }}>← Retour au tableau de bord</div>
 
             {/* Header */}
-            <div style={{ background: treatDone ? `linear-gradient(135deg,${C.ok},#1a7a4c)` : `linear-gradient(135deg,${C.treat},#1a5c45)`, borderRadius: 14, padding: "16px 24px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16, color: "white", flexWrap: "wrap" }}>
+            <div className="salle-banner" style={{ background: treatDone ? `linear-gradient(135deg,${C.ok},#1a7a4c)` : `linear-gradient(135deg,${C.treat},#1a5c45)`, borderRadius: 14, padding: "16px 24px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16, color: "white", flexWrap: "wrap" }}>
               <div style={{ fontSize: 22 }}>{treatDone ? "✅" : "🦷"}</div>
               <div style={{ flex: 1, minWidth: 180 }}>
                 <div style={{ fontSize: 11, opacity: .7, textTransform: "uppercase" }}>{treatDone ? "Soin terminé" : "Salle de traitement"}</div>
@@ -1248,7 +1233,7 @@ export default function DentaCare() {
 
                     {/* Post-treat actions */}
                     <Cd>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                      <div className="grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                         <div onClick={() => { setRxPid(String(treatPat.id)); om("rx"); }} style={{ padding: "14px 10px", borderRadius: 10, border: `1.5px solid ${C.pri}`, cursor: "pointer", textAlign: "center" }}>
                           <div style={{ fontSize: 20 }}>📝</div><div style={{ fontWeight: 600, fontSize: 11, color: C.pri, marginTop: 4 }}>Ordonnance</div>
                         </div>
@@ -1296,7 +1281,7 @@ export default function DentaCare() {
                       <div key={t.k} onClick={() => setRdvTab(t.k)} style={{ padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, background: rdvTab === t.k ? C.pri : "transparent", color: rdvTab === t.k ? "white" : C.mu }}>{t.l}</div>
                     ))}
                   </div>
-                  <Cd style={{ padding: 0, overflowX: "auto" }}>
+                  <Cd style={{ padding: 0 }} className="table-wrap">
                     {sorted.length === 0 ? (
                       <div style={{ padding: "40px 20px", textAlign: "center", color: C.mu, fontSize: 13 }}>Aucun rendez-vous</div>
                     ) : (
@@ -1363,7 +1348,7 @@ export default function DentaCare() {
                 </Cd>
               )}
             </div>
-            <Cd style={{ padding: 0, overflowX: "auto" }}>
+            <Cd style={{ padding: 0 }} className="table-wrap">
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "#F8FAFC" }}>
                   {["N°", "Patient", "Total", "Payé", "Reste", "Statut", ""].map((h, i) => (
